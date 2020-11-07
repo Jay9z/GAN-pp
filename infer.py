@@ -10,13 +10,13 @@ import paddle.fluid as fluid
 from paddle.fluid.dygraph import to_variable
 from paddle.fluid.optimizer import AdamOptimizer
 
-from dataloader import DataLoader
+from dataloader import DataLoader, Transform
 from preprocessing import *
 from utils.utils import AverageMeter
-from net.idcgan import Generator
+from net.idcgan import Generator,Invertor
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--net', type=str, default='G_basic')
+parser.add_argument('--net', type=str, default='basic')
 parser.add_argument('--lr', type=float, default=0.001)
 parser.add_argument('--num_epochs', type=int, default=30)
 parser.add_argument('--batch_size', type=int, default=4)
@@ -78,66 +78,83 @@ def inference_multi_scale():
     pass
 
 
-# def save_images(images,suffix="input"):
-#     ## images
-#     # print(images.shape,type(images))
-#     if isinstance(images,Image.Image):
-#         images = np.array(images)
-#     assert isinstance(images,np.ndarray), "wrong image data type" 
-#     print(images.shape)
-#     n = images.shape[0]
-#     for i in range(n):
-#         #image = np.transpose(images[i],(1,2,0))
-#         image = images[i]
-#         image = Image.fromarray(image.astype(np.uint8))#.convert('P')
-#         image.save(f"{i}_{suffix}.png")
-
-
 # this inference code reads a list of image path, and do prediction for each image one by one
-def main():
-    # 0. env preparation
+def generate_images():
+
     with fluid.dygraph.guard():
-        # 1. create model
-        model = Generator()
-        model.eval()
-        # 2. load pretrained model 
-        pretrain_file = os.path.join(args.checkpoint_folder, f"{args.net}-Epoch-{args.num_epochs}")
+        G = Generator()
+        pretrain_file = os.path.join(args.checkpoint_folder, f"G_{args.net}-Epoch-{args.num_epochs}")
         print(pretrain_file)
         if os.path.exists(pretrain_file):
             state,_ = fluid.load_dygraph(pretrain_file)
             model.set_dict(state)
 
-        # 3. read test image list
         image_folder = ""
         image_list_file = "dummy_data/fabric_list.txt"
 
-        # 4. create transforms for test image, transform should be same as training
-        transform = None
-        if args.inf_type == 0:
-            #transform = Normalize2()
-            pass
+        transform = Transform()
 
         data = DataLoader(image_folder,image_list_file,transform=transform)
         dataloader = fluid.io.DataLoader.from_generator(capacity=2, return_list=True)
         dataloader.set_sample_generator(data,1)
 
-        # 5. loop over list of images
+        G.eval()
         for i in range(20):
-        #for images,labels in dataloader():
             z = np.random.rand(1,64)
-
-            # 7. image to variable
             z = to_variable(z)
             z = fluid.layers.cast(z,dtype='float32')
-
-            # 8. call inference func
-            preds = model(z).numpy()
-            result = np.squeeze(preds[0])
-            print(result)
-
-            #print(preds.shape,result.shape)
-            o_file = f"{args.checkpoint_folder}/{i}_pred.png"
+            fake_x = G(z)
+            result = np.squeeze(fake_x.numpy()[0])
+            result_min= np.min(result)
+            result_range = np.max(result)-np.min(result)
+            result = (result-result_min)/result_range*255
+            o_file = f"{args.checkpoint_folder}/gen_{i}.png"
             cv2.imwrite(o_file,result)
 
+def main():
+
+    with fluid.dygraph.guard():
+        G = Generator()
+        E = Invertor()
+
+        G_pretrain_file = os.path.join(args.checkpoint_folder, f"G_{args.net}-Epoch-{args.num_epochs}")
+        E_pretrain_file = os.path.join(args.checkpoint_folder, f"E_{args.net}-Epoch-{args.num_epochs}")
+        print(G_pretrain_file)
+        print(E_pretrain_file)
+        if os.path.exists(G_pretrain_file):
+            state,_ = fluid.load_dygraph(G_pretrain_file)
+            G.set_dict(state)
+        if os.path.exists(E_pretrain_file):
+            state,_ = fluid.load_dygraph(E_pretrain_file)
+            E.set_dict(state)
+
+        image_folder = ""
+        image_list_file = "dummy_data/fabric_list.txt"
+
+        transform = Transform()
+
+        data = DataLoader(image_folder,image_list_file,transform=transform)
+        dataloader = fluid.io.DataLoader.from_generator(capacity=2, return_list=True)
+        dataloader.set_sample_generator(data,1)
+
+        E.eval()
+        G.eval()
+        for idx,(images,labels) in enumerate(dataloader):
+
+            x = to_variable(images)
+            x = fluid.layers.cast(x,dtype='float32')
+            x = fluid.layers.transpose(x,perm=[0,3,1,2])
+
+            reconstruct_x = G(E(x))
+            reconstruct_image = fluid.layers.transpose(reconstruct_x,perm=[0,2,3,1])
+            result = np.squeeze(reconstruct_image.numpy()[0])*255
+
+            o_file = f"{args.checkpoint_folder}/x_{idx}.png"
+            result = reconstruct(np.squeeze(images.numpy()[0]),result)
+            cv2.imwrite(o_file,result)
+            if idx == 20:
+                break
+
 if __name__ == "__main__":
+    generate_images()
     main()

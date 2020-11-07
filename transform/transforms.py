@@ -76,7 +76,6 @@ class Pad(object):
         return image, label
 
 
-# TODO
 class CenterCrop(object):
     def __init__(self,size):
         self.size = size
@@ -88,7 +87,6 @@ class CenterCrop(object):
         lab = label[left_r:left_r+self.size,left_c:left_c+self.size]
         return img,lab
 
-# TODO
 class Resize(object):
     def __init__(self,size):
         self.size = size
@@ -99,8 +97,6 @@ class Resize(object):
             lab = cv2.resize(label,(self.size,self.size),cv2.INTER_NEAREST)
         return img,lab
 
-
-# TODO
 class RandomFlip(object):
     def __call__(self,image,label=None):
         val= np.random.rand()*2
@@ -115,7 +111,6 @@ class RandomFlip(object):
 
         return image,label
 
-# TODO
 class RandomCrop(object):
     def __init__(self,size):
         self.size = size
@@ -129,8 +124,6 @@ class RandomCrop(object):
             label = label[left_r:left_r+self.size, left_c:left_c+self.size]
         return img,label
 
-
-# TODO
 class Scale(object):
     def __init__(self,scale=1.0):
         self.scale = scale
@@ -146,8 +139,6 @@ class Scale(object):
             label = cv2.resize(label,(h,w),interpolation=cv2.INTER_NEAREST)
         return image,label
 
-
-# TODO
 class RandomScale(object):
     def __init__(self,min_scale=0.8,max_scale=1.5):
         self.min_scale = min_scale

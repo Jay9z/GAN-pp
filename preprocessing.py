@@ -25,7 +25,7 @@ class Normalize2():
         # random scale, pad, random crop, random flip, convert data type, and normalize ops
         self.augment = Compose(
                 [
-                    ConvertDataType(),
+                    #ConvertDataType(),
                     Normalize(mean_val,std_val)
                     ]
                     )
@@ -91,3 +91,13 @@ class Augmentation4():
 
     def __call__(self, image, label=None):
         return self.augment(image,label)
+
+
+def reconstruct(x,GE_x):
+    x_mean = np.mean(x)
+    x_std = np.std(x)
+    gex_mean = np.mean(GE_x)
+    gex_std = np.std(GE_x)
+    xx = x_mean + (GE_x-gex_mean)*gex_std/x_std
+    xx = (xx - np.min(xx))/(np.max(xx)-np.min(xx))*255
+    return xx

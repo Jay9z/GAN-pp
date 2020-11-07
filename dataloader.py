@@ -9,7 +9,7 @@ class Transform():
         self.size=size
     
     def __call__(self,image,label):
-        img = cv2.resize(image,(self.size,self.size),interpolation=cv2.INTER_LINEAR)
+        img = image/255.0
         return img,label
 
 
@@ -39,7 +39,7 @@ class DataLoader():
 
     def preprocess(self, data,label):
         if self.transform:
-            data = self.transform(data)
+            data,label = self.transform(data,label)
         #print(data.shape)
         data = data[:,:,np.newaxis]
         return data,label      ## must be a list or tuple to compatible with function,from_generator()
@@ -57,6 +57,7 @@ class DataLoader():
 def make_train_dataset(image_path,folder):
     img = Image.open(image_path)
     img = np.array(img)
+    img = cv2.blur(img,(3,3))
     print(img.shape)
     fp = open("fabric_list.txt",'a+')
     for i in range(2,16):
@@ -74,26 +75,29 @@ def make_train_dataset(image_path,folder):
 def main():
     batch_size = 3
     #place = fluid.CPUPlace()
-    transform = None#Transform()
+    transform = Transform()
     #place = fluid.CUDAPlace(0)
     with fluid.dygraph.guard():
         # TODO: craete BasicDataloder instance
         image_folder=""
         image_list_file="dummy_data/fabric_list.txt"
         data = DataLoader(image_folder,image_list_file,transform=transform)
-        z = ZLoader(len(data))
-        print("size of data: ",len(z))
+        #z = ZLoader(len(data))
+        #print("size of data: ",len(z))
 
         dataloader = fluid.io.DataLoader.from_generator(capacity=2, return_list=True)
-        dataloader.set_sample_generator(z,batch_size)
+        dataloader.set_sample_generator(data,batch_size)
 
         num_epoch = 2
         for epoch in range(1, num_epoch+1):
             print(f'Epoch [{epoch}/{num_epoch}]:')
             for idx, (data,label) in enumerate(dataloader):
                 print(f'Iter {idx}, Data shape: {data.shape},{label.shape} ')
+                img = np.squeeze(data.numpy()[0])*255
+                cv2.imwrite(f"{idx}.png",img)
 
 if __name__ == "__main__":
+    
     main()
 
     # image_path = "dummy_data/fabric/0001_000_02.png"
